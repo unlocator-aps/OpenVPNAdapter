@@ -35,7 +35,20 @@
 #elif defined(__APPLE__)
 # include "TargetConditionals.h"
 # define OPENVPN_PLATFORM_TYPE_APPLE
-# if TARGET_OS_IPHONE // includes iPad
+// Reuse the iOS socket and security paths because tvOS uses the same OpenVPN engine.
+// Keep this branch before TARGET_OS_IPHONE, which is also true for tvOS.
+// Apple platform definitions: TargetConditionals.h in the selected SDK.
+// Engine paths: openvpn/transport/client/udpcli.hpp and openvpn/apple/cf/cfsec.hpp.
+# if TARGET_OS_TV
+#  define OPENVPN_PLATFORM_TVOS
+#  define OPENVPN_PLATFORM_IPHONE
+// Select the simulator path separately even when device and simulator both use arm64.
+#  if TARGET_OS_SIMULATOR
+#   define OPENVPN_PLATFORM_IPHONE_SIMULATOR
+#  else
+#   define OPENVPN_PLATFORM_IPHONE_DEVICE
+#  endif
+# elif TARGET_OS_IPHONE // includes iPad
 #  define OPENVPN_PLATFORM_IPHONE
 #  define OPENVPN_PLATFORM_IPHONE_DEVICE
 # elif TARGET_IPHONE_SIMULATOR // includes iPad

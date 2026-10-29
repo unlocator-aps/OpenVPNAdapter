@@ -157,7 +157,10 @@ namespace openvpn {
     static std::string render_flags(const SCNetworkReachabilityFlags flags)
     {
       std::string ret;
-#if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR // Mac OS X doesn't define WWAN flags
+      // Keep cellular flags on the existing iOS path because tvOS uses Wi-Fi or Ethernet.
+      // TARGET_OS_IPHONE also includes tvOS, so exclude it explicitly here.
+      // @see https://developer.apple.com/documentation/systemconfiguration/scnetworkreachabilityflags/iswwan for more details.
+#if (TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR) && !TARGET_OS_TV
       if (flags & kSCNetworkReachabilityFlagsIsWWAN)
 	ret += 'W';
       else
@@ -261,7 +264,9 @@ namespace openvpn {
 	}
 #endif
 
-#if TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR // Mac OS X doesn't define WWAN flags
+      // Reuse the existing non-cellular reachability result for tvOS Wi-Fi and Ethernet.
+      // Only iOS can override that result with the cellular connection status.
+#if (TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR) && !TARGET_OS_TV
       if ((flags & kSCNetworkReachabilityFlagsIsWWAN) == kSCNetworkReachabilityFlagsIsWWAN)
 	{
 	  // ... but WWAN connections are OK if the calling application

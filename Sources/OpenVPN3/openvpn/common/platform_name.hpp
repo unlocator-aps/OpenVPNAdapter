@@ -38,6 +38,10 @@ namespace openvpn {
 #endif // UWP
 #elif defined(OPENVPN_PLATFORM_MAC)
     return "mac";
+// Report tvOS before the shared iOS platform flag so engine diagnostics identify it correctly.
+// Transport and packet processing still use the existing mobile implementation.
+#elif defined(OPENVPN_PLATFORM_TVOS)
+    return "tvos";
 #elif defined(OPENVPN_PLATFORM_IPHONE)
     return "ios";
 #elif defined(OPENVPN_PLATFORM_IPHONE_SIMULATOR)

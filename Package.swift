@@ -7,6 +7,7 @@ let package = Package(
     platforms: [
         .iOS("9.0"),
         .macOS("10.11"),
+        .tvOS("17.0"),
     ],
     products: [
         .library(name: "OpenVPNAdapter", type: .static, targets: ["OpenVPNAdapter"]),
@@ -23,6 +24,12 @@ let package = Package(
                 .headerSearchPath("../ASIO/asio/include"),
                 .headerSearchPath("../OpenVPN3"),
                 .define("USE_ASIO")
+            ],
+            linkerSettings: [
+                // Link the packet-tunnel bridge and reachability APIs on all supported platforms.
+                // Adapter bridge: Sources/OpenVPNAdapter/library/OpenVPNAdapterImpl.mm.
+                .linkedFramework("NetworkExtension"),
+                .linkedFramework("SystemConfiguration"),
             ]
         ),
         .target(
@@ -33,7 +40,7 @@ let package = Package(
             ]
         ),
         .target(
-            name: "mbedTLS", 
+            name: "mbedTLS",
             sources: ["library"],
             cSettings: [
                 .define("MBEDTLS_MD4_C"),
@@ -60,6 +67,14 @@ let package = Package(
                 .define("HAVE_LZ4"),
                 .define("OPENVPN_FORCE_TUN_NULL"),
                 .define("USE_TUN_BUILDER")
+            ],
+            linkerSettings: [
+                // Reuse the iOS hardware ID helper on tvOS because UIDevice is available there.
+                // Link UIKit only on mobile platforms; macOS uses its existing hardware ID path.
+                // Engine helper: Sources/OpenVPN3/openvpn/netconf/hwaddr.hpp.
+                .linkedFramework(
+                    "UIKit", .when(platforms: [.iOS, .tvOS])
+                ),
             ]
         )
     ],

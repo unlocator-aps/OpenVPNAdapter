@@ -47,6 +47,31 @@ And run `$ pod install`.
 ### Swift Package Manager
 Add `OpenVPNAdapter` package to your project using File > Swift Packages > Add Package Dependency menu. Xcode 11 will automatically retrieve all necessary dependencies. In addition to that you need to add `SystemConfiguration` framework to the Frameworks and Libraries. If you work on iOS project add `UIKit` as well.
 
+## OpenVPNAdapter on tvOS
+
+`OpenVPNAdapter` supports tvOS 17.0 and later through Swift Package Manager.
+The package keeps the existing product and module names for iOS, macOS and tvOS.
+The adapter reuses the iOS socket, security and packet-flow paths. The OpenVPN 3
+engine handles packet processing with the existing mbedTLS and LZ4 dependencies.
+Cellular reachability checks stay on iOS, and engine diagnostics identify tvOS.
+
+Add this repository as a Swift package dependency and link the `OpenVPNAdapter`
+product to the tvOS packet-tunnel extension. Use `import OpenVPNAdapter` and pass
+`NEPacketTunnelProvider.packetFlow` through the existing `OpenVPNAdapterPacketFlow`
+bridge, as shown in the usage example below. The package links NetworkExtension
+and SystemConfiguration, plus UIKit on iOS and tvOS for the shared hardware ID helper.
+Select the `appletvos` SDK for Apple TV or `appletvsimulator` for the simulator.
+
+Use one shared package dependency across the app's iOS, macOS and tvOS targets.
+Replace the local proof-of-concept product `OpenVPNAdapterTVOS` and its imports
+with `OpenVPNAdapter`; linking both packages duplicates the same adapter classes.
+The CocoaPods and standalone Xcode project configurations retain their existing
+platform declarations; the tvOS integration described here uses Swift Package Manager.
+
+Device and simulator builds were checked with the tvOS SDK. VPN connections,
+TCP/UDP traffic, DNS, reconnect and stop still need validation on an Apple TV.
+Dependency versions and cryptographic settings are unchanged.
+
 ## Usage
 At first, you need to add a Packet Tunnel Provider extension to the project and configure provision profiles for both the container app and the extension. There are official documentation and many tutorials describing how to do it so we won't dwell on this in detail.
 
