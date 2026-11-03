@@ -9,6 +9,8 @@
 
 #import <mbedtls/error.h>
 
+#include <limits.h>
+
 #import "OpenVPNError.h"
 
 @implementation NSError (OpenVPNAdapterErrorGeneration)
@@ -199,14 +201,21 @@
 @implementation NSError (OpenVPNMbedTLSErrorGeneration)
 
 + (NSError *)ovpn_errorObjectForMbedTLSError:(NSInteger)errorCode description:(NSString *)description {
-    size_t length = 1024;
-    char *buffer = malloc(length);
-    
-    mbedtls_strerror(errorCode, buffer, length);
-    
-    NSString *reason = [NSString stringWithUTF8String:buffer];
-    
-    free(buffer);
+    NSString *reason;
+    // NSError uses NSInteger, which is 64-bit on supported platforms, while
+    // mbedtls_strerror accepts a 32-bit int. Check the range before converting
+    // so a large error code cannot be truncated into a different mbedTLS error.
+    // mbedtls_strerror also negates negative codes internally. Exclude INT_MIN:
+    // its positive counterpart (2147483648) cannot be represented by an int.
+    // If the code is outside this safe range, use a generic failure description
+    // and preserve the original value in NSError.code.
+    if (errorCode > INT_MIN && errorCode <= INT_MAX) {
+        char buffer[1024];
+        mbedtls_strerror((int)errorCode, buffer, sizeof(buffer));
+        reason = [NSString stringWithUTF8String:buffer];
+    } else {
+        reason = [NSString stringWithFormat:@"Unknown mbedTLS error (%ld).", (long)errorCode];
+    }
     
     return [NSError errorWithDomain:OpenVPNIdentityErrorDomain code:errorCode userInfo:@{
         NSLocalizedDescriptionKey: description,

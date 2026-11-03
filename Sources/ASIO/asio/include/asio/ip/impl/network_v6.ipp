@@ -95,13 +95,16 @@ std::string network_v6::to_string() const
 
 std::string network_v6::to_string(asio::error_code& ec) const
 {
-  using namespace std; // For sprintf.
+  using namespace std; // For snprintf and sprintf_s.
   ec = asio::error_code();
+  // Format the CIDR suffix separately from the address. Valid IPv6 prefix
+  // lengths are 0...128, so this buffer holds the slash, digits and null terminator.
+  // Keep the write bounded with snprintf (or sprintf_s on the secure-RTL path).
   char prefix_len[16];
 #if defined(ASIO_HAS_SECURE_RTL)
   sprintf_s(prefix_len, sizeof(prefix_len), "/%u", prefix_length_);
 #else // defined(ASIO_HAS_SECURE_RTL)
-  sprintf(prefix_len, "/%u", prefix_length_);
+  snprintf(prefix_len, sizeof(prefix_len), "/%u", prefix_length_);
 #endif // defined(ASIO_HAS_SECURE_RTL)
   return address_.to_string() + prefix_len;
 }

@@ -23,6 +23,7 @@
 #include <cstring>
 #include <cerrno>
 #include <new>
+#include <limits>
 #include "asio/detail/assert.hpp"
 #include "asio/detail/socket_ops.hpp"
 #include "asio/error.hpp"
@@ -2114,17 +2115,31 @@ const char* inet_ntop(int af, const void* src, char* dest, size_t length,
     ec = asio::error::invalid_argument;
   if (result != 0 && af == ASIO_OS_DEF(AF_INET6) && scope_id != 0)
   {
-    using namespace std; // For strcat and sprintf.
+    using namespace std; // For snprintf, strlen and memcpy.
     char if_name[(IF_NAMESIZE > 21 ? IF_NAMESIZE : 21) + 1] = "%";
     const in6_addr_type* ipv6_address = static_cast<const in6_addr_type*>(src);
     bool is_link_local = ((ipv6_address->s6_addr[0] == 0xfe)
         && ((ipv6_address->s6_addr[1] & 0xc0) == 0x80));
     bool is_multicast_link_local = ((ipv6_address->s6_addr[0] == 0xff)
         && ((ipv6_address->s6_addr[1] & 0x0f) == 0x02));
+    // Keep the leading '%' and bound the numeric fallback to the remaining buffer.
+    // The buffer can hold either an interface name or all decimal digits of scope_id,
+    // including the terminating null byte.
     if ((!is_link_local && !is_multicast_link_local)
         || if_indextoname(static_cast<unsigned>(scope_id), if_name + 1) == 0)
-      sprintf(if_name + 1, "%lu", scope_id);
-    strcat(dest, if_name);
+      snprintf(if_name + 1, sizeof(if_name) - 1, "%lu", scope_id);
+    // The system inet_ntop call writes only the address, without the '%scope' suffix.
+    // Check the remaining capacity before appending it to the caller's buffer.
+    // The suffix must leave one byte for its null terminator; equality is too large.
+    // Check address_length first so the capacity subtraction cannot underflow.
+    const std::size_t address_length = strlen(dest);
+    const std::size_t scope_length = strlen(if_name);
+    if (address_length >= length || scope_length >= length - address_length)
+    {
+      ec = asio::error::no_buffer_space;
+      return 0;
+    }
+    memcpy(dest + address_length, if_name, scope_length + 1);
   }
   return result;
 #endif // defined(ASIO_WINDOWS) || defined(__CYGWIN__)
@@ -3473,7 +3488,17 @@ asio::error_code getnameinfo(const socket_addr_type* addr,
       host, hostlen, serv, servlen, flags, ec);
 #else
   clear_last_error();
-  int error = ::getnameinfo(addr, addrlen, host, hostlen, serv, servlen, flags);
+  // ASIO exposes these lengths as size_t; the POSIX resolver takes socklen_t.
+  // On Apple platforms, size_t is 64 bits while socklen_t is 32 bits, so an
+  // unchecked cast could pass a different address or buffer length to getnameinfo.
+  // Validate all three lengths before casting. Report an invalid argument without
+  // calling the resolver if any length cannot be represented by its parameter type.
+  const std::size_t max_length = (std::numeric_limits<socklen_t>::max)();
+  if (addrlen > max_length || hostlen > max_length || servlen > max_length)
+    return ec = asio::error::invalid_argument;
+  int error = ::getnameinfo(addr, static_cast<socklen_t>(addrlen),
+      host, static_cast<socklen_t>(hostlen),
+      serv, static_cast<socklen_t>(servlen), flags);
   return ec = translate_addrinfo_error(error);
 #endif
 }

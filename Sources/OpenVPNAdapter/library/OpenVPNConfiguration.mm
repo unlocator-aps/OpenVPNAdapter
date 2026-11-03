@@ -15,7 +15,24 @@
 #import "OpenVPNMinTLSVersion.h"
 #import "OpenVPNTLSCertProfile.h"
 
+#include <climits>
+
 using namespace openvpn;
+
+// The Objective-C API accepts NSInteger, which can hold values wider than the
+// engine's int fields for connectionTimeout, sslDebugLevel and keyDirection.
+// A cast alone could turn a large positive value into a negative or unrelated value.
+// Reject values outside INT_MIN...INT_MAX before updating the configuration, so
+// an invalid assignment leaves the previous setting unchanged.
+// This checks storage limits only; it preserves representable negative values,
+// including the -1 key-direction value used for bidirectional authentication.
+static int OpenVPNCheckedInt(NSInteger value, NSString *property) {
+    if (value < INT_MIN || value > INT_MAX) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"%@ must be between %d and %d.", property, INT_MIN, INT_MAX];
+    }
+    return static_cast<int>(value);
+}
 
 NSString *const OpenVPNTransportProtocolUDPValue = @"udp";
 NSString *const OpenVPNTransportProtocolTCPValue = @"tcp";
@@ -329,7 +346,7 @@ NSString *const OpenVPNTLSCertProfileDefaultValue = @"default";
 }
 
 - (void)setConnectionTimeout:(NSInteger)connectionTimeout {
-    _config.connTimeout = connectionTimeout;
+    _config.connTimeout = OpenVPNCheckedInt(connectionTimeout, @"connectionTimeout");
 }
 
 - (BOOL)tunPersist {
@@ -385,7 +402,7 @@ NSString *const OpenVPNTLSCertProfileDefaultValue = @"default";
 }
 
 - (void)setSslDebugLevel:(NSInteger)sslDebugLevel {
-    _config.sslDebugLevel = sslDebugLevel;
+    _config.sslDebugLevel = OpenVPNCheckedInt(sslDebugLevel, @"sslDebugLevel");
 }
 
 - (OpenVPNCompressionMode)compressionMode {
@@ -411,7 +428,7 @@ NSString *const OpenVPNTLSCertProfileDefaultValue = @"default";
 }
 
 - (void)setKeyDirection:(NSInteger)keyDirection {
-    _config.defaultKeyDirection = keyDirection;
+    _config.defaultKeyDirection = OpenVPNCheckedInt(keyDirection, @"keyDirection");
 }
 
 - (BOOL)forceCiphersuitesAESCBC {
@@ -517,7 +534,15 @@ NSString *const OpenVPNTLSCertProfileDefaultValue = @"default";
 }
 
 - (void)setClockTick:(NSUInteger)clockTick {
-    _config.clockTickMS = clockTick;
+    // The API accepts NSUInteger, but the engine stores milliseconds in unsigned int.
+    // On 64-bit platforms, a larger value could wrap into a shorter interval or zero;
+    // zero disables the periodic tick callback. Reject it before changing the setting.
+    // Values from zero through UINT_MAX are passed to the engine unchanged.
+    if (clockTick > UINT_MAX) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"clockTick must not exceed %u milliseconds.", UINT_MAX];
+    }
+    _config.clockTickMS = static_cast<unsigned int>(clockTick);
 }
 
 + (BOOL)supportsSecureCoding {

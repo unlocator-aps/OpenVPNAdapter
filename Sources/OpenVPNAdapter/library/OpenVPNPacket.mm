@@ -45,9 +45,17 @@
 }
 
 - (NSData *)vpnData {
-    // Prepend data with network protocol. It should be done because OpenVPN uses uint32_t prefixes containing network
-    // protocol.
-    uint32_t prefix = CFSwapInt32HostToBig(_protocolFamily.unsignedIntegerValue);
+    // OpenVPN expects a four-byte protocol-family prefix before the packet payload.
+    // NB! NSNumber can hold negative values or values wider than this uint32_t field.
+    // Check both bounds before reading unsignedIntValue, which would otherwise hide
+    // the sign or truncate high bits and encode a different protocol family.
+    // Once checked, convert the prefix to network byte order (big-endian) so it has
+    // the same wire format regardless of the host's integer width or byte order.
+    if (_protocolFamily.longLongValue < 0 || _protocolFamily.unsignedLongLongValue > UINT32_MAX) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"The packet protocol family must fit in an unsigned 32-bit prefix."];
+    }
+    uint32_t prefix = CFSwapInt32HostToBig(_protocolFamily.unsignedIntValue);
     NSUInteger prefix_size = sizeof(uint32_t);
     
     NSMutableData *data = [NSMutableData dataWithCapacity:prefix_size + _data.length];
